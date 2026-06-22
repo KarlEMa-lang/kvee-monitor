@@ -35,13 +35,15 @@ def kraabi_kuulutused(url):
             "Accept-Language": "et-EE,et;q=0.9,en;q=0.8"
         })
 
-        leht.goto(url, wait_until="networkidle", timeout=30000)
+        leht.goto(url, wait_until="domcontentloaded", timeout=30000)
 
         # Oota kuni kuulutused laetakse
         try:
-            leht.wait_for_selector("article", timeout=10000)
+            leht.wait_for_selector("article", timeout=15000)
         except Exception:
             print("  Kuulutuste laadimine aegus")
+
+        time.sleep(3)
 
         html = leht.content()
         browser.close()
