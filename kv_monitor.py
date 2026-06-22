@@ -44,6 +44,9 @@ def kraabi_kuulutused(url):
         print(f"Viga laadimisel: {e}")
         return []
 
+    print(f"  HTTP vastus: {resp.status_code}")
+    print(f"  HTML algus: {resp.text[:300]}")
+
     soup = BeautifulSoup(resp.text, "html.parser")
     kuulutused = []
 
