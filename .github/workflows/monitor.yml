@@ -25,8 +25,6 @@ jobs:
       - name: Installi teegid
         run: pip install -r requirements.txt
 
-      - name: Installi Playwright brauser
-        run: playwright install chromium --with-deps
 
       - name: Käivita monitor
         env:
