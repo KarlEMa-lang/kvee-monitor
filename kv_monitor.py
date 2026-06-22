@@ -1,9 +1,8 @@
 import json
 import os
 import time
-import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
+from playwright.sync_api import sync_playwright
 
 CONFIG_FILE = "config.json"
 NAHTUD_FILE = "nahtud_kuulutused.json"
@@ -27,38 +26,30 @@ def salvesta_nahtud(nahtud):
 
 
 def kraabi_kuulutused(url):
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "et-EE,et;q=0.9,en;q=0.8",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    }
-
-    try:
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        print(f"Viga laadimisel: {e}")
-        return []
-
-    print(f"  HTTP vastus: {resp.status_code}")
-    print(f"  HTML algus: {resp.text[:300]}")
-
-    soup = BeautifulSoup(resp.text, "html.parser")
     kuulutused = []
 
-    # Proovi erinevaid selectoreid
-    kaardid = (
-        soup.select("article[data-id]") or
-        soup.select("article[id]") or
-        soup.select(".object-item") or
-        soup.select("[class*='object-item']")
-    )
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        leht = browser.new_page()
+        leht.set_extra_http_headers({
+            "Accept-Language": "et-EE,et;q=0.9,en;q=0.8"
+        })
 
-    print(f"  HTML selectoriga leitud elemente: {len(kaardid)}")
+        leht.goto(url, wait_until="networkidle", timeout=30000)
+
+        # Oota kuni kuulutused laetakse
+        try:
+            leht.wait_for_selector("article", timeout=10000)
+        except Exception:
+            print("  Kuulutuste laadimine aegus")
+
+        html = leht.content()
+        browser.close()
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    kaardid = soup.select("article")
+    print(f"  Leitud article elemente: {len(kaardid)}")
 
     for kaart in kaardid:
         kuulutuse_id = (
@@ -95,6 +86,7 @@ def kraabi_kuulutused(url):
 
 
 def saada_telegram_teade(token, chat_id, kuulutus):
+    import requests
     tekst = (
         f"🏠 *Uus kuulutus kv.ee*\n\n"
         f"📍 {kuulutus['aadress']}\n"
