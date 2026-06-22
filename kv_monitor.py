@@ -4,7 +4,6 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
-from urllib.parse import urlencode
 
 CONFIG_FILE = "config.json"
 NAHTUD_FILE = "nahtud_kuulutused.json"
@@ -27,21 +26,6 @@ def salvesta_nahtud(nahtud):
         json.dump(list(nahtud), f)
 
 
-def ehita_otsingu_url(filters):
-    params = {}
-
-    if filters.get("asukoht"):
-        params["county"] = filters["asukoht"]
-    piirkond = filters.get("piirkond")
-    if isinstance(piirkond, list):
-        params["parish[]"] = piirkond
-    elif piirkond:
-        params["parish[]"] = [piirkond]
-
-    base_url = "https://www.kv.ee/search"
-    return f"{base_url}?{urlencode(params, doseq=True)}"
-
-
 def kraabi_kuulutused(url):
     headers = {
         "User-Agent": (
@@ -50,6 +34,7 @@ def kraabi_kuulutused(url):
             "Chrome/120.0.0.0 Safari/537.36"
         ),
         "Accept-Language": "et-EE,et;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
 
     try:
@@ -62,18 +47,32 @@ def kraabi_kuulutused(url):
     soup = BeautifulSoup(resp.text, "html.parser")
     kuulutused = []
 
-    for kaart in soup.select("article[data-id]"):
-        kuulutuse_id = kaart.get("data-id", "")
+    # Proovi erinevaid selectoreid
+    kaardid = (
+        soup.select("article[data-id]") or
+        soup.select("article[id]") or
+        soup.select(".object-item") or
+        soup.select("[class*='object-item']")
+    )
+
+    print(f"  HTML selectoriga leitud elemente: {len(kaardid)}")
+
+    for kaart in kaardid:
+        kuulutuse_id = (
+            kaart.get("data-id") or
+            kaart.get("id") or
+            kaart.get("data-object-id", "")
+        )
         if not kuulutuse_id:
             continue
 
-        pealkiri_el = kaart.select_one(".object-title, h2, .title")
+        pealkiri_el = kaart.select_one(".object-title, h2, h3, .title")
         pealkiri = pealkiri_el.get_text(strip=True) if pealkiri_el else "—"
 
-        hind_el = kaart.select_one(".object-price-value, .price")
+        hind_el = kaart.select_one(".object-price-value, .price, [class*='price']")
         hind = hind_el.get_text(strip=True) if hind_el else "—"
 
-        aadress_el = kaart.select_one(".object-address, .address")
+        aadress_el = kaart.select_one(".object-address, .address, [class*='address']")
         aadress = aadress_el.get_text(strip=True) if aadress_el else "—"
 
         link_el = kaart.select_one("a[href]")
@@ -116,7 +115,6 @@ def saada_telegram_teade(token, chat_id, kuulutus):
 
 
 def main():
-    # Tokeni ja chat_id loeb GitHub Secretsist (keskkonnamuutujad)
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
 
@@ -127,10 +125,10 @@ def main():
     config = laadi_config()
     nahtud = laadi_nahtud()
 
-    otsi_url = ehita_otsingu_url(config["filters"])
-    print(f"Kontrollin: {otsi_url}")
+    url = config["search_url"]
+    print(f"Kontrollin: {url}")
 
-    kuulutused = kraabi_kuulutused(otsi_url)
+    kuulutused = kraabi_kuulutused(url)
     print(f"Leitud {len(kuulutused)} kuulutust")
 
     uued = 0
