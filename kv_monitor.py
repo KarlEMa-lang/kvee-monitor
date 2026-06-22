@@ -45,11 +45,18 @@ def kraabi_kuulutused(url):
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # Debug: prindi HTML struktuur kuulutuste piirkonnast
-    body = soup.find("body")
-    if body:
-        print("  HTML struktuur (3000 tähemärki):")
-        print(body.decode_contents()[:3000])
+    # Leia kõik lingid mis näevad välja nagu kuulutused (number URL-is)
+    import re
+    kuulutuse_lingid = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        # kv.ee kuulutuste URL on kujul /3869123 või /et/korter/3869123
+        if re.search(r'/\d{5,}', href):
+            kuulutuse_lingid.append(href)
+
+    print(f"  Leitud kuulutuse-sarnaseid linke: {len(kuulutuse_lingid)}")
+    for l in kuulutuse_lingid[:10]:
+        print(f"    {l}")
 
     return []
 
